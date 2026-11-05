@@ -1,6 +1,7 @@
 import { db, getEverPodTracking } from './db'
 import type { ParsedRow, Shipment, ImportBatch, Activity, PodStatus } from './types'
 import { todayLocal } from './parser'
+import { normalizeDateTime } from './dateUtils'
 
 export interface ImportResult { added:number; updated:number; unchanged:number; errors:number; total:number; duplicates:number }
 function sameData(a:Shipment,b:ParsedRow,status:PodStatus):boolean {
@@ -14,17 +15,27 @@ export async function commitImport(rows:ParsedRow[], duplicateCount:number, work
   const now=new Date().toISOString()
   await db.transaction('rw',db.shipments,db.batches,db.activities,async()=>{
     const everPod=await getEverPodTracking()
+    // โหลดรายการของวันทำงานครั้งเดียว (เร็วกว่าค้นทีละแถว) โดยให้ PENDING มาก่อน
+    const sameDay=await db.shipments.where('workDate').equals(workDate).toArray()
+    const byTracking=new Map<string,Shipment>()
+    for (const x of sameDay) {
+      const k=x.tracking.trim().toUpperCase()
+      const p=byTracking.get(k)
+      if (!p || (p.status!=='PENDING' && x.status==='PENDING')) byTracking.set(k,x)
+    }
     for (const row of rows) {
       const tracking=row.tracking.trim().toUpperCase()
-      const existing=await db.shipments.where('[workDate+status]').equals([workDate,'PENDING']).filter(x=>x.tracking.toUpperCase()===tracking).first()
-        ?? await db.shipments.where('workDate').equals(workDate).filter(x=>x.tracking.toUpperCase()===tracking).first()
-      const priorPod=everPod.has(tracking) || (await db.shipments.where('tracking').equals(tracking).filter(x=>x.status==='POD').count())>0
-      const status:PodStatus=priorPod || row.status==='POD' ? 'POD' : row.status
-      const record:Shipment={tracking,carrier:row.carrier,code:row.code,sourceDate:row.sourceDate,status,remark:row.remark,priority:row.priority,payment:row.payment,ref:row.ref,amount:row.amount,dueDate:row.dueDate,address:row.address,workDate,createdAt:existing?.createdAt??now,updatedAt:now}
+      const existing=byTracking.get(tracking)
+      const status:PodStatus=everPod.has(tracking) || row.status==='POD' ? 'POD' : row.status
+      // Due Date = Source Date เสมอ
+      const src=normalizeDateTime(row.sourceDate)
+      const data:ParsedRow={...row,sourceDate:src,dueDate:src}
+      const record:Shipment={tracking,carrier:data.carrier,code:data.code,sourceDate:src,status,remark:data.remark,priority:data.priority,payment:data.payment,ref:data.ref,amount:data.amount,dueDate:src,address:data.address,workDate,createdAt:existing?.createdAt??now,updatedAt:now}
       if (!existing) {
-        await db.shipments.add(record); added++
+        const id=await db.shipments.add(record); added++
+        byTracking.set(tracking,{...record,id})
         await db.activities.add({tracking,workDate,at:now,type:'CREATED',message:`เพิ่มรายการใหม่ สถานะ ${status}`,afterStatus:status})
-      } else if (sameData(existing,row,status)) {
+      } else if (sameData(existing,data,status)) {
         unchanged++
       } else {
         await db.shipments.update(existing.id!,{...record,id:existing.id})
