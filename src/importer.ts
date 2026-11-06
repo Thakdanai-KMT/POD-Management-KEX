@@ -18,11 +18,15 @@ export async function commitImport(rows:ParsedRow[], duplicateCount:number, work
     // โหลดรายการของวันทำงานครั้งเดียว (เร็วกว่าค้นทีละแถว) โดยให้ PENDING มาก่อน
     const sameDay=await db.shipments.where('workDate').equals(workDate).toArray()
     const byTracking=new Map<string,Shipment>()
-    for (const x of sameDay) {
-      const k=x.tracking.trim().toUpperCase()
-      const p=byTracking.get(k)
-      if (!p || (p.status!=='PENDING' && x.status==='PENDING')) byTracking.set(k,x)
-    }
+for (const x of sameDay) {
+  const k = x.tracking.trim().toUpperCase()
+  const p = byTracking.get(k)
+
+  // เลือกรายการที่อัปเดตล่าสุดเสมอ
+  if (!p || x.updatedAt > p.updatedAt) {
+    byTracking.set(k, x)
+  }
+}
     for (const row of rows) {
       const tracking=row.tracking.trim().toUpperCase()
       const existing=byTracking.get(tracking)
