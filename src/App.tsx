@@ -19,11 +19,22 @@ function bangkokDateParts(timestamp:number){
   const get=(type:string)=>parts.find(p=>p.type===type)?.value||'00'
   return {year:Number(get('year')),month:Number(get('month')),day:Number(get('day'))}
 }
-function bangkokWindow(timestamp:number){
-  const {year,month,day}=bangkokDateParts(timestamp)
-  const start=Date.UTC(year,month-1,day,-7,0,0)
-  const tomorrow=Date.UTC(year,month-1,day+1,-7,10,0)
-  return {start,end:tomorrow}
+function bangkokWindow(timestamp: number) {
+  const { year, month, day } = bangkokDateParts(timestamp)
+
+  const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000
+
+  // เริ่มต้นวันนี้ 00:00:00 เวลาไทย
+  const start =
+    Date.UTC(year, month - 1, day, 0, 0, 0) -
+    BANGKOK_OFFSET_MS
+
+  // สิ้นสุดพรุ่งนี้ 10:00:00 เวลาไทย
+  const end =
+    Date.UTC(year, month - 1, day + 1, 10, 0, 0) -
+    BANGKOK_OFFSET_MS
+
+  return { start, end }
 }
 function formatRemaining(milliseconds:number){
   const total=Math.max(0,Math.floor(milliseconds/1000))
@@ -69,12 +80,41 @@ async function refresh() {
   useEffect(()=>{refresh().catch(e=>setNotice(String(e)))},[workDate])
   const current=shipments
   const counts=useMemo(()=>({total:current.length,pending:current.filter(x=>x.status==='PENDING').length,pod:current.filter(x=>x.status==='POD').length,failed:current.filter(x=>x.status==='FAILED').length,cod:current.filter(x=>x.payment.toUpperCase()==='COD').length,noncod:current.filter(x=>x.payment.toUpperCase().includes('NON')).length,codAmount:current.filter(x=>x.payment.toUpperCase()==='COD').reduce((a,x)=>a+(x.amount??0),0)}),[current])
-  const filtered=useMemo(()=>current.filter(x=>{
-    const q=query.toLowerCase()
-    return (page==='pending'?x.status==='PENDING':page==='pod'?x.status==='POD':page==='failed'?x.status==='FAILED':true) &&
-      (!q||[x.tracking,x.address,x.carrier,x.code].some(v=>v.toLowerCase().includes(q))) &&
-      (payment==='ALL'||x.payment.toUpperCase()===payment)
-  }),[current,page,query,payment])
+const filtered = useMemo(() => {
+  const rows = current.filter(x => {
+    const q = query.toLowerCase()
+
+    return (
+      (page === 'pending'
+        ? x.status === 'PENDING'
+        : page === 'pod'
+          ? x.status === 'POD'
+          : page === 'failed'
+            ? x.status === 'FAILED'
+            : true
+      ) &&
+      (!q || [x.tracking, x.address, x.carrier, x.code]
+        .some(v => v.toLowerCase().includes(q))) &&
+      (payment === 'ALL' || x.payment.toUpperCase() === payment)
+    )
+  })
+
+  // หน้า Pending เรียงตาม Source Date จากเก่าไปใหม่
+  if (page === 'pending') {
+    rows.sort((a, b) => {
+      const dateA = parseDueDate(a.sourceDate || a.dueDate)
+      const dateB = parseDueDate(b.sourceDate || b.dueDate)
+
+      // วันที่ไม่ถูกต้องให้อยู่ท้ายรายการ
+      if (dateA === null) return dateB === null ? 0 : 1
+      if (dateB === null) return -1
+
+      return dateA - dateB
+    })
+  }
+
+  return rows
+}, [current, page, query, payment])
   // ใช้ข้อมูลทุกวันทำงาน: 1 Tracking = 1 รายการล่าสุด, ตัดรายการที่เคย POD แล้ว
   const deadlineGroups=useMemo(()=>{
     const {end}=bangkokWindow(clockNow)
@@ -94,10 +134,21 @@ async function refresh() {
       rows.push({...x,dueTimestamp:t})
     }
     rows.sort((a,b)=>a.dueTimestamp-b.dueTimestamp)
-    const overdue=rows.filter(x=>x.dueTimestamp<clockNow)
-    const upcoming=rows.filter(x=>x.dueTimestamp>=clockNow&&x.dueTimestamp<=end)
-    const urgent=upcoming.filter(x=>x.dueTimestamp-clockNow<=3*60*60*1000)
-    return {upcoming,urgent,overdue,invalidCount}
+const overdue = rows.filter(
+  x => x.dueTimestamp < clockNow
+)
+
+const upcoming = rows.filter(
+  x => x.dueTimestamp >= clockNow &&
+       x.dueTimestamp <= end
+)
+
+const urgent = rows.filter(
+  x => x.dueTimestamp >= clockNow &&
+       x.dueTimestamp <= clockNow + 3 * 60 * 60 * 1000
+)
+
+return { upcoming, urgent, overdue, invalidCount }
   },[allShipments,clockNow])
   async function copyDeadlineRows(rows:Shipment[],label:string){
     if(!rows.length){setNotice(`ไม่มีรายการ${label}ให้คัดลอก`);return}
