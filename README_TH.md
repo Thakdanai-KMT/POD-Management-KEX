@@ -1,8 +1,12 @@
 # POD Management System
 
-ระบบจัดการงาน POD แบบใช้งานคนเดียวบน Browser เครื่องเดิม ใช้ React + TypeScript + Vite + IndexedDB (Dexie)
+ระบบจัดการงาน POD แบบใช้งานคนเดียวบน Browser ใช้ React + TypeScript + Vite + IndexedDB (Dexie) พร้อม PWA สำหรับใช้งานออนไลน์และออฟไลน์
 
 ## คุณสมบัติ
+- ติดตั้งเป็น PWA บน Windows / Android ที่รองรับ
+- ใช้งานหน้าแอปแบบออฟไลน์ได้หลังเปิดเว็บไซต์ออนไลน์อย่างน้อยหนึ่งครั้ง
+- แสดงสถานะออนไลน์ / ออฟไลน์
+- Service Worker Cache เฉพาะไฟล์โปรแกรม ไม่ลบหรือแก้ไข IndexedDB เมื่ออัปเดต
 - วางข้อมูลจาก Google Sheets ด้วย Copy & Paste เท่านั้น (ไม่มีการเชื่อมต่อ Google Sheets)
 - รองรับ TSV จาก Clipboard และข้อความคั่นด้วย `|`
 - ไม่มี Header ตามรูปแบบข้อมูลตัวอย่าง 15 คอลัมน์
@@ -25,6 +29,21 @@ npm run dev
 ```
 
 5. เปิด URL ที่ Vite แสดง เช่น `http://localhost:5173`
+
+## ทดสอบ PWA และ Offline
+1. Build และเปิดผ่าน HTTPS หรือ localhost (ไม่รองรับ PWA เต็มรูปแบบเมื่อเปิดไฟล์ index.html โดยตรง)
+2. เปิดเว็บไซต์ขณะออนไลน์ รอให้โหลดหน้าและไฟล์ทั้งหมดให้เสร็จ
+3. ติดตั้งแอปจากเมนู Install ใน Chrome / Edge (ถ้า Browser แสดงตัวเลือก)
+4. ปิดอินเทอร์เน็ตแล้วเปิดแอปอีกครั้ง เพื่อตรวจสอบการทำงานออฟไลน์
+5. เมื่อ Deploy เวอร์ชันใหม่ ให้เปิดเว็บขณะออนไลน์เพื่อรับไฟล์ใหม่ ข้อมูลใน IndexedDB จะยังคงอยู่
+
+## นโยบายข้อมูลและการอัปเดต
+- ชื่อฐานข้อมูล `pod-management-local` ต้องคงเดิม เพื่อให้ Browser พบข้อมูลเดิม
+- ห้ามใช้ `db.delete()` หรือ `indexedDB.deleteDatabase()` ในขั้นตอนอัปเดตโปรแกรม
+- การเปลี่ยน Schema ในอนาคตต้องเพิ่ม `this.version(2)` / เวอร์ชันถัดไป พร้อม Dexie migration และห้ามลบ Store ที่มีข้อมูลโดยไม่มีแผนย้ายข้อมูล
+- Service Worker จัดการเฉพาะ Cache ของไฟล์แอป และไม่แตะ IndexedDB
+- ข้อมูลแยกตาม Origin และ Browser Profile เช่น Chrome กับ Edge หรือ URL Production กับ Preview จะเป็นคนละชุดข้อมูล
+- ข้อมูลในเครื่องอาจสูญหายได้หากผู้ใช้ล้าง Site Data, Browser ล้างพื้นที่จัดเก็บ หรืออุปกรณ์เสีย จึงควร Export Backup JSON เป็นประจำ
 
 ## Build สำหรับทดสอบ
 ```cmd

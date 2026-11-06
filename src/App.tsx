@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Activity as ActivityIcon, Archive, CheckCircle2, CircleAlert, ClipboardPaste, Clock3, Copy, Download, FileSpreadsheet, History, LayoutDashboard, ListTodo, PackageCheck, RefreshCw, Search, Settings, ShieldCheck, Trash2, Upload, X } from 'lucide-react'
+import { Activity as ActivityIcon, Archive, CheckCircle2, CircleAlert, ClipboardPaste, Clock3, Copy, Download, FileSpreadsheet, History, LayoutDashboard, ListTodo, PackageCheck, RefreshCw, Search, Settings, ShieldCheck, Trash2, Upload, X, Wifi, WifiOff } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { db } from './db'
 import { commitImport } from './importer'
@@ -58,6 +58,14 @@ export default function App(){
   const [notice,setNotice]=useState('')
   const [allShipments,setAllShipments]=useState<Shipment[]>([])
   const [clockNow,setClockNow]=useState(()=>Date.now())
+  const [isOnline,setIsOnline]=useState(()=>navigator.onLine)
+  useEffect(()=>{
+    const handleOnline=()=>setIsOnline(true)
+    const handleOffline=()=>setIsOnline(false)
+    window.addEventListener('online',handleOnline)
+    window.addEventListener('offline',handleOffline)
+    return()=>{window.removeEventListener('online',handleOnline);window.removeEventListener('offline',handleOffline)}
+  },[])
   useEffect(()=>{const timer=window.setInterval(()=>setClockNow(Date.now()),1000);return()=>window.clearInterval(timer)},[])
 async function refresh() {
   const [all, b, a] = await Promise.all([
@@ -255,7 +263,7 @@ async function doImport() {
       <div className="sidebar-bottom"><ShieldCheck size={16}/><span>ข้อมูลจัดเก็บในเครื่องนี้เท่านั้น</span></div>
     </aside>
     <main className="main">
-      <header className="topbar"><div><div className="eyebrow">DELIVERY OPERATIONS / {labels[page].toUpperCase()}</div><h1>{labels[page]}</h1></div><div className="top-actions"><label className="date-control"><span>วันที่ทำงาน</span><input type="date" value={workDate} onChange={e=>setWorkDate(e.target.value)}/></label><button className="icon-btn" title="Refresh" onClick={()=>refresh()}><RefreshCw size={17}/></button></div></header>
+      <header className="topbar"><div><div className="eyebrow">DELIVERY OPERATIONS / {labels[page].toUpperCase()}</div><h1>{labels[page]}</h1></div><div className="top-actions"><span className={`connection-status ${isOnline?'online':'offline'}`} title={isOnline?'เชื่อมต่ออินเทอร์เน็ตแล้ว':'ไม่มีอินเทอร์เน็ต — ใช้ข้อมูลในเครื่องได้'}>{isOnline?<Wifi size={14}/>:<WifiOff size={14}/>} {isOnline?'ออนไลน์':'ออฟไลน์'}</span><label className="date-control"><span>วันที่ทำงาน</span><input type="date" value={workDate} onChange={e=>setWorkDate(e.target.value)}/></label><button className="icon-btn" title="Refresh" onClick={()=>refresh()}><RefreshCw size={17}/></button></div></header>
       {notice&&<div className="notice"><span>{notice}</span><button onClick={()=>setNotice('')}><X size={16}/></button></div>}
       {page==='dashboard'&&<div className="page-content">
         <div className="welcome-row"><div><h2>สรุปงานประจำวัน</h2><p>ภาพรวมรายการพัสดุของวันที่ {new Date(workDate+'T00:00:00').toLocaleDateString('th-TH',{dateStyle:'long'})}</p></div><button className="btn primary" onClick={()=>setPage('import')}><Upload size={16}/> นำเข้าข้อมูล</button></div>

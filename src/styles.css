@@ -25,3 +25,6 @@
 .critical-time,.overdue-time{font-weight:800;color:#dc2626;font-variant-numeric:tabular-nums}
 .deadline-note{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;background:#fff7ed;color:#9a3412;font-size:12px}
 @media(max-width:900px){.deadline-grid{grid-template-columns:1fr}}
+
+/* สถานะการเชื่อมต่อสำหรับ PWA */
+.connection-status{display:inline-flex;align-items:center;gap:6px;border-radius:20px;padding:7px 10px;font-size:10px;font-weight:700;white-space:nowrap}.connection-status.online{background:#eaf8f0;color:#218b58}.connection-status.offline{background:#fff4e5;color:#a65b13}
